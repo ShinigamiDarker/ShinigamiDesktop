@@ -29,8 +29,7 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Extract project
-        run: unzip -q ShinigamiDesktop-Windows11-v6-desktop.zip
-
+        run: unzip -q ShinigamiDesktop-Windows11-v6-corrigido.zip
       - name: Build APK
         run: gradle --no-daemon -p ShinigamiDesktop assembleDebug
 
