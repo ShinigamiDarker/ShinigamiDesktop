@@ -29,7 +29,7 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Extract project
-        run: unzip -q ShinigamiDesktop-source-corrigido.zip
+        run: unzip -q ShinigamiDesktop-source-corrigido-v2.zip
 
       - name: Build APK
         run: gradle --no-daemon -p ShinigamiDesktop assembleDebug
