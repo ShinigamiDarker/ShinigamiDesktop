@@ -22,12 +22,15 @@ steps:
       distribution: temurin
       java-version: '17'
 
-  # Não usar android-actions/setup-android aqui:
-  # nesta execução ele tentou instalar o pacote antigo "tools".
   - name: Configure Android SDK
     run: |
-      echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-      echo "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
+      SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+      if [ -z "$SDK" ]; then
+        echo "Android SDK não encontrado."
+        exit 1
+      fi
+      echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+      echo "$SDK/platform-tools" >> "$GITHUB_PATH"
 
   - name: Accept licenses and install SDK packages
     shell: bash
@@ -35,12 +38,6 @@ steps:
       set -euo pipefail
 
       SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-
-      if [ -z "$SDK" ] || [ ! -d "$SDK/cmdline-tools" ]; then
-        echo "Android SDK ou cmdline-tools não encontrado no runner."
-        exit 1
-      fi
-
       SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)"
 
       if [ -z "$SDKMANAGER" ]; then
@@ -68,8 +65,7 @@ steps:
 
       sudo mv apktool.jar /usr/local/bin/apktool.jar
 
-      printf '#!/bin/sh\nexec java -jar /usr/local/bin/apktool.jar "$@"\n' \
-        > apktool
+      printf '#!/bin/sh\nexec java -jar /usr/local/bin/apktool.jar "$@"\n' > apktool
 
       chmod +x apktool
       sudo mv apktool /usr/local/bin/apktool
@@ -83,10 +79,7 @@ steps:
           name = "com.binary.hyperdroid.apk"
 
           if name not in archive.namelist():
-              raise SystemExit(
-                  "APK principal não encontrado no XAPK. "
-                  "Confira o nome do APK dentro de input.xapk."
-              )
+              raise SystemExit("APK principal não encontrado dentro do XAPK.")
 
           with open("original.apk", "wb") as output:
               output.write(archive.read(name))
@@ -117,10 +110,9 @@ steps:
 
   - name: Align and sign APK
     run: |
-      BUILD_TOOLS="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/35.0.0"
+      BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
 
-      "$BUILD_TOOLS/zipalign" -f 4 \
-        unsigned.apk aligned.apk
+      "$BUILD_TOOLS/zipalign" -f 4 unsigned.apk aligned.apk
 
       "$BUILD_TOOLS/apksigner" sign \
         --ks test-key.jks \
