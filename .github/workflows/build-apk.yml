@@ -1,15 +1,15 @@
 name: Teste Shinigami
 
 on:
-workflow_dispatch:
-push:
-branches:
-- main
-- master
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
-teste:
-runs-on: ubuntu-latest
-steps:
-- name: Confirmar execução
-run: echo "Workflow YAML válido"
+  teste:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirmar execução
+        run: echo "Workflow YAML válido"
