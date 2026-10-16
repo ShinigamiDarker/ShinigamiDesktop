@@ -1,133 +1,15 @@
-name: Build HyperDroid sem anúncios recomendados
+name: Teste Shinigami
 
 on:
 workflow_dispatch:
 push:
-branches: [main, master]
-
-permissions:
-contents: read
+branches:
+- main
+- master
 
 jobs:
-build:
+teste:
 runs-on: ubuntu-latest
-
 steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-
-  - name: Set up Java 17
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: '17'
-
-  - name: Configure Android SDK
-    run: |
-      SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-      if [ -z "$SDK" ]; then
-        echo "Android SDK não encontrado."
-        exit 1
-      fi
-      echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-      echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-
-  - name: Accept licenses and install SDK packages
-    shell: bash
-    run: |
-      set -euo pipefail
-
-      SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-      SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-
-      if [ -z "$SDKMANAGER" ]; then
-        echo "sdkmanager não encontrado."
-        exit 1
-      fi
-
-      yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-      "$SDKMANAGER" \
-        "platform-tools" \
-        "build-tools;35.0.0" \
-        "platforms;android-35"
-
-  - name: Verify project files
-    run: |
-      test -f input.xapk
-      test -f scripts/hide_recommended.py
-
-  - name: Install Apktool
-    run: |
-      curl -fsSL \
-        https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.11.1.jar \
-        -o apktool.jar
-
-      sudo mv apktool.jar /usr/local/bin/apktool.jar
-
-      printf '#!/bin/sh\nexec java -jar /usr/local/bin/apktool.jar "$@"\n' > apktool
-
-      chmod +x apktool
-      sudo mv apktool /usr/local/bin/apktool
-
-  - name: Extract original APK
-    run: |
-      python3 - <<'PY'
-      import zipfile
-
-      with zipfile.ZipFile("input.xapk") as archive:
-          name = "com.binary.hyperdroid.apk"
-
-          if name not in archive.namelist():
-              raise SystemExit("APK principal não encontrado dentro do XAPK.")
-
-          with open("original.apk", "wb") as output:
-              output.write(archive.read(name))
-      PY
-
-  - name: Decode APK
-    run: apktool d -f original.apk -o decoded
-
-  - name: Apply ad removal patch
-    run: |
-      python3 scripts/hide_recommended.py \
-        decoded/res/layout/start_menu_recommended.xml
-
-  - name: Rebuild APK
-    run: apktool b decoded -o unsigned.apk
-
-  - name: Create signing key
-    run: |
-      keytool -genkeypair \
-        -keystore test-key.jks \
-        -storepass android \
-        -keypass android \
-        -alias hyperdroid-test \
-        -keyalg RSA \
-        -keysize 2048 \
-        -validity 10000 \
-        -dname "CN=HyperDroid"
-
-  - name: Align and sign APK
-    run: |
-      BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-
-      "$BUILD_TOOLS/zipalign" -f 4 unsigned.apk aligned.apk
-
-      "$BUILD_TOOLS/apksigner" sign \
-        --ks test-key.jks \
-        --ks-pass pass:android \
-        --key-pass pass:android \
-        --out HyperDroid-no-recommendations.apk \
-        aligned.apk
-
-      "$BUILD_TOOLS/apksigner" verify --verbose \
-        HyperDroid-no-recommendations.apk
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: HyperDroid-no-recommendations
-      path: HyperDroid-no-recommendations.apk
-      if-no-files-found: error
-      retention-days: 14
+- name: Confirmar execução
+run: echo "Workflow YAML válido"
