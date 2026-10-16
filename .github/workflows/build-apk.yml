@@ -1,3 +1,4 @@
+
 name: Build HyperDroid sem anúncios recomendados
 
 on:
@@ -25,20 +26,27 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept SDK licenses and install tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "build-tools;35.0.0" \
+            "platforms;android-35"
+
       - name: Verify project files
         run: |
           test -f input.xapk
           test -f scripts/hide_recommended.py
-          test -f .github/workflows/build.yml
 
       - name: Install Apktool
         run: |
           curl -fsSL \
-            https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool \
-            -o apktool
-          curl -fsSL \
             https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.11.1.jar \
             -o apktool.jar
+
+          printf '#!/bin/sh\nexec java -jar /usr/local/bin/apktool.jar "$@"\n' \
+            > apktool
           chmod +x apktool
           sudo mv apktool /usr/local/bin/apktool
           sudo mv apktool.jar /usr/local/bin/apktool.jar
@@ -47,18 +55,21 @@ jobs:
         run: |
           python3 - <<'PY'
           import zipfile
-          with zipfile.ZipFile("input.xapk") as z:
+
+          with zipfile.ZipFile("input.xapk") as archive:
               name = "com.binary.hyperdroid.apk"
-              if name not in z.namelist():
-                  raise SystemExit("APK principal não encontrado")
-              with open("original.apk", "wb") as f:
-                  f.write(z.read(name))
+
+              if name not in archive.namelist():
+                  raise SystemExit("APK principal não encontrado no XAPK")
+
+              with open("original.apk", "wb") as output:
+                  output.write(archive.read(name))
           PY
 
       - name: Decode APK
         run: apktool d -f original.apk -o decoded
 
-      - name: Hide recommended section
+      - name: Apply ad removal patch
         run: |
           python3 scripts/hide_recommended.py \
             decoded/res/layout/start_menu_recommended.xml
@@ -66,7 +77,7 @@ jobs:
       - name: Rebuild APK
         run: apktool b decoded -o unsigned.apk
 
-      - name: Sign APK
+      - name: Create signing key
         run: |
           keytool -genkeypair \
             -keystore test-key.jks \
@@ -76,11 +87,14 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=HyperDroid Test,O=Local Build,C=BR"
+            -dname "CN=HyperDroid"
 
-          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+      - name: Align and sign APK
+        run: |
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
 
-          "$BUILD_TOOLS/zipalign" -f 4 unsigned.apk aligned.apk
+          "$BUILD_TOOLS/zipalign" -f 4 \
+            unsigned.apk aligned.apk
 
           "$BUILD_TOOLS/apksigner" sign \
             --ks test-key.jks \
@@ -99,3 +113,4 @@ jobs:
           path: HyperDroid-no-recommendations.apk
           if-no-files-found: error
           retention-days: 14
+          
