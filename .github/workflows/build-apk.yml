@@ -1,5 +1,4 @@
-
-name: Build Shinigami Desktop APK
+name: Build HyperDroid sem anúncios recomendados
 
 on:
   workflow_dispatch:
@@ -23,21 +22,80 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Extract project
-        run: unzip -q HyperDroid-AD-Removal-GitHub.zip
-      - name: Build APK
-        run: gradle --no-daemon -p ShinigamiDesktop assembleDebug
+      - name: Verify project files
+        run: |
+          test -f input.xapk
+          test -f scripts/hide_recommended.py
+          test -f .github/workflows/build.yml
+
+      - name: Install Apktool
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool \
+            -o apktool
+          curl -fsSL \
+            https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.11.1.jar \
+            -o apktool.jar
+          chmod +x apktool
+          sudo mv apktool /usr/local/bin/apktool
+          sudo mv apktool.jar /usr/local/bin/apktool.jar
+
+      - name: Extract original APK
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile("input.xapk") as z:
+              name = "com.binary.hyperdroid.apk"
+              if name not in z.namelist():
+                  raise SystemExit("APK principal não encontrado")
+              with open("original.apk", "wb") as f:
+                  f.write(z.read(name))
+          PY
+
+      - name: Decode APK
+        run: apktool d -f original.apk -o decoded
+
+      - name: Hide recommended section
+        run: |
+          python3 scripts/hide_recommended.py \
+            decoded/res/layout/start_menu_recommended.xml
+
+      - name: Rebuild APK
+        run: apktool b decoded -o unsigned.apk
+
+      - name: Sign APK
+        run: |
+          keytool -genkeypair \
+            -keystore test-key.jks \
+            -storepass android \
+            -keypass android \
+            -alias hyperdroid-test \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=HyperDroid Test,O=Local Build,C=BR"
+
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+
+          "$BUILD_TOOLS/zipalign" -f 4 unsigned.apk aligned.apk
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks test-key.jks \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out HyperDroid-no-recommendations.apk \
+            aligned.apk
+
+          "$BUILD_TOOLS/apksigner" verify --verbose \
+            HyperDroid-no-recommendations.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ShinigamiDesktop-debug-apk
-          path: ShinigamiDesktop/app/build/outputs/apk/debug/app-debug.apk
+          name: HyperDroid-no-recommendations
+          path: HyperDroid-no-recommendations.apk
           if-no-files-found: error
           retention-days: 14
-          
