@@ -1,4 +1,5 @@
-name: Teste Shinigami
+
+name: Build Shinigami APK
 
 on:
   workflow_dispatch:
@@ -7,9 +8,66 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
-  teste:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
-      - name: Confirmar execução
-        run: echo "Workflow YAML válido"
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Verificar arquivos do projeto
+        run: |
+          echo "Arquivos na raiz:"
+          ls -la
+          echo "Arquivos Gradle:"
+          find . -type f \( -name gradlew -o -name settings.gradle -o -name settings.gradle.kts \) -not -path './.git/*' | head -100
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Localizar projeto
+        id: project
+        shell: bash
+        run: |
+          WRAPPER=$(find . -type f -name gradlew -not -path './.git/*' -print -quit)
+
+          if [ -z "$WRAPPER" ]; then
+            echo "ERRO: não encontrei gradlew no repositório."
+            echo "Verifique se o projeto Android está dentro do ZIP."
+            exit 1
+          fi
+
+          DIR=$(dirname "$WRAPPER")
+
+          if [ ! -f "$DIR/settings.gradle" ] && [ ! -f "$DIR/settings.gradle.kts" ]; then
+            echo "ERRO: arquivo settings.gradle não encontrado."
+            exit 1
+          fi
+
+          chmod +x "$WRAPPER"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar APK
+        run: |
+          cd "${{ steps.project.outputs.dir }}"
+          ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Disponibilizar APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shinigami-APK
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
+          retention-days: 7
