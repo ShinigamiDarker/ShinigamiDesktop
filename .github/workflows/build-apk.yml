@@ -1,4 +1,4 @@
-name: Build Shinigami APK
+name: Inspecionar Shinigami XAPK
 
 on:
   workflow_dispatch:
@@ -11,83 +11,40 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Compilar Shinigami
+  inspect:
+    name: Inspecionar pacote Android
     runs-on: ubuntu-latest
-    timeout-minutes: 45
 
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v4
 
-      - name: Configurar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Verificar Android SDK
-        shell: bash
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          if [ -z "$ANDROID_HOME" ] && [ -z "$ANDROID_SDK_ROOT" ]; then
-            echo "ERRO: Android SDK não encontrado."
-            exit 1
-          fi
-
-      - name: Extrair projeto Android
+      - name: Extrair arquivo do projeto
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ ! -f "HyperDroid-AD-Removal-GitHub.zip" ]; then
-            echo "ERRO: ZIP não encontrado na raiz do repositório."
-            ls -la
-            exit 1
-          fi
 
           mkdir -p projeto
           unzip -o HyperDroid-AD-Removal-GitHub.zip -d projeto
 
-      - name: Localizar projeto Gradle
-        id: gradle
-        shell: bash
-        run: |
-          set -euo pipefail
+          XAPK=$(find projeto -type f -name '*.xapk' -print -quit)
 
-          WRAPPER=$(find projeto -type f -name gradlew -print -quit)
-
-          if [ -z "$WRAPPER" ]; then
-            echo "ERRO: gradlew não encontrado no ZIP."
-            find projeto -maxdepth 4 -type f | head -100
+          if [ -z "$XAPK" ]; then
+            echo "ERRO: nenhum arquivo XAPK encontrado."
+            find projeto -maxdepth 4 -type f
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$WRAPPER")
+          mkdir -p resultado
+          unzip -o "$XAPK" -d resultado
 
-          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
-            echo "ERRO: settings.gradle não encontrado."
-            exit 1
-          fi
+          echo "Arquivos encontrados dentro do XAPK:"
+          find resultado -type f -printf '%p (%s bytes)\n'
 
-          chmod +x "$WRAPPER"
-          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Compilar APK Debug
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cd "${{ steps.gradle.outputs.dir }}"
-          ./gradlew --no-daemon --stacktrace assembleDebug
-
-      - name: Publicar APK
-        if: success()
+      - name: Disponibilizar arquivos extraídos
         uses: actions/upload-artifact@v4
         with:
-          name: Shinigami-APK
-          path: projeto/**/build/outputs/apk/debug/*.apk
+          name: Analise-Shinigami-XAPK
+          path: resultado/
           if-no-files-found: error
           retention-days: 7
